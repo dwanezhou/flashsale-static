@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+	<link href="static/assets/global/plugins/bootstrap/css/bootstrap.min.css" rel="stylesheet" type="text/css"/>
+	<link href="static/assets/global/css/components.css" rel="stylesheet" type="text/css"/>
+	<link href="static/assets/admin/pages/css/login.css" rel="stylesheet" type="text/css"/>
+	<script src="static/assets/global/plugins/jquery-1.11.0.min.js" type="text/javascript"></script>
+	<script src="./getHost.js" type="text/javascript"></script>	
+    <title>Title</title>
+</head>
+<body class="login">
+  <div class="content">
+	<h3 class="form-title">商品详情</h3>
+	<div class="form-group">
+		<label id = "promotionStartTimeLabel" style="color:red" class="control-label"></label>
+		<div>
+			<label style="color: red;" class="control-label" id="promotionStartTime"/>
+		</div>
+	</div>
+    <div class="form-group">
+		<div>
+			<label class="control-label" id="title"/>
+		</div>
+    </div>
+	<div class="form-group">
+		<div>
+			<img style="width:200px;height:auto;" id="imgUrl"/>
+		</div>
+	</div>
+	<div class="form-group">
+		<label class="control-label">描述</label>
+		<div>
+			<label class="control-label" id="description"/>
+		</div>
+	</div>
+	<div id="normalPriceContainer" class="form-group">
+		<label class="control-label">价格</label>
+		<div>
+			<label class="control-label" id="price"/>
+		</div>
+	</div>
+	<div class="form-group">
+		<label id="promotionPriceLabel" style="color:red" class="control-label">秒杀价格</label>
+		<div>
+			<label style="color:red" control-label" id="promotionPrice"/>
+		</div>
+	</div>
+	<div class="form-group">
+		<label class="control-label">销量</label>
+		<div>
+			<label class="control-label" id="sales"/>
+		</div>
+	</div>
+	<div class="form-group">
+		<label class="control-label">库存</label>
+		<div>
+			<label class="control-label" id="stock"/>
+		</div>
+	</div>
+	<div class="form-actions">
+	  <button class="btn blue" type="submit" id="create">下单</button>
+	</div>
+  </div>
+
+</body>
+
+<script>
+	var itemVO = {};
+	jQuery(document).ready(function() {
+		getItem();
+		// 下单
+		$("#create").on("click", function(){
+			var token = window.localStorage["token"];
+			if (token == null) {
+				alert("用户未登录，不能下单");
+				window.location.href="login.html";
+				return false;
+			}
+			var orderCreateQuery = {}
+			orderCreateQuery.itemId = itemVO.id;
+			// 暂写死
+			orderCreateQuery.itemAmount = "1";
+			orderCreateQuery.promotionId = itemVO.promotionId;
+			$.ajax({
+				type:"POST",
+				contentType:"application/json",
+				url:"http://"+g_host+"/order/createOrder?token="+token,
+				data:JSON.stringify(orderCreateQuery),
+				xhrFields:{withCredentials:true},
+				success:function(data) {
+					if (data.respCode == "00000") {
+						alert("下单成功")
+						getItem();
+					} else if (data.respCode == "20003"){
+						alert("下单失败，原因为" + data.respMsg);
+						window.location.href="./login.html";
+					}else {
+						alert("下单失败，原因为" + data.respMsg);
+					}
+				},
+				error:function(data) {
+					alert("下单失败，原因为" + data.responseText);
+				}
+			});
+		});
+	});
+	function getItem() {
+		$.ajax({
+			type:"GET",
+			url:"http://"+g_host+"/item/getItem",
+			data:{
+				"id": getParam("id")
+			},
+			xhrFields:{withCredentials:true},
+			success:function(data) {
+				if (data.respCode == "00000") {
+					itemVO = data.result;
+					setInterval(updateItem,1000);
+					// updateItem();
+				} else {
+					alert("获取商品列表信息失败，原因为" + data.respMsg);
+				}
+			},
+			error:function(data) {
+				alert("获取商品列表信息失败，原因为" + data.responseText);
+			}
+		});
+	}
+	// 更新商品详情数据
+	function updateItem() {
+		$("#title").text(itemVO.title);
+		$("#imgUrl").attr("src",itemVO.imgUrl);
+		$("#description").text(itemVO.description);
+		$("#price").text(itemVO.price);
+		$("#sales").text(itemVO.sales);
+		$("#stock").text(itemVO.stock);
+		// 秒杀活动还未开始
+		if (itemVO.promotionStatus == "NOT_STARTED") {
+			var currentTime = Date.parse(new Date());
+			var startTime = itemVO.promotionStartTime.replace(/-/g, "/");
+			startTime = (new Date(startTime)).getTime();
+			var delta = (startTime-currentTime)/1000;
+			if (delta <= 0) {
+				itemVO.promotionStatus="IN_PROGRESS";
+				updateItem();
+			}
+			$("#promotionStartTime").text("秒杀活动将于："+itemVO.promotionStartTime+"开始  倒计时："+delta+"秒");
+			$("#promotionPrice").text(itemVO.promotionPrice);
+			$("#create").attr("disabled",true);
+			// 秒杀活动进行中
+		} else if (itemVO.promotionStatus == "IN_PROGRESS") {
+			$("#promotionStartTime").text("秒杀活动进行中");
+			$("#promotionPrice").text(itemVO.promotionPrice);
+			$("#create").attr("disabled",false);
+			$("#normalPriceContainer").hide();
+			
+		}
+		
+	}
+	// 存在BUG，最好用正则
+	function getParam(param) {
+		var query = window.location.search.substr(1);
+		var values = query.split("&");
+		for (var i = 0; i < values.length; i++) {
+			var pair = values[i].split("=");
+			if (pair[0] == param) {
+				return pair[1];
+			}
+		}
+		return "";
+	}
+</script>
+</html>
